@@ -15,6 +15,13 @@ from .config import MESSAGE_DIR, FILE_BASE_URL
 
 
 app = FastAPI(title="MessageBackend (Python)")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class MessageOut(BaseModel):
