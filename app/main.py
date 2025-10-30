@@ -3,10 +3,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-
+from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-
 from .db import get_db
 from .tasks.gettoken import run_gettoken
 from .tasks.getmessage import run_getmessage
