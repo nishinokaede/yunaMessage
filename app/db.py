@@ -9,11 +9,17 @@ from .config import DB_PATH
 class Database:
     def __init__(self, db_path: Path):
         self.db_path = db_path
-        self.conn = sqlite3.connect(self.db_path)
+        # 允许跨线程访问同一连接，适配 APScheduler 在线程中执行任务
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30)
         self.conn.row_factory = sqlite3.Row
 
     def init_db(self):
         cur = self.conn.cursor()
+        # 提升并发读写能力
+        try:
+            cur.execute("PRAGMA journal_mode=WAL")
+        except Exception:
+            pass
         # 保存每次请求的 token（增加group字段）
         cur.execute(
             """
