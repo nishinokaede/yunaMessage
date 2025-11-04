@@ -27,6 +27,7 @@ TOKEN_URL = {
 
 def run_gettoken() -> dict:
     """从远程API更新各组的临时token，并保存到数据库。"""
+    print("开始更新所有组的token")
     db = get_db()
     configs = load_group_configs()
     results = {}
@@ -54,5 +55,6 @@ def run_gettoken() -> dict:
                 results[grp] = {"ok": False, "error": "no access_token in response"}
         except Exception as ex:
             results[grp] = {"ok": False, "error": str(ex)}
+    print("更新所有组的token完成")
 
     return {"groups": results}

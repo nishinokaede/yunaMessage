@@ -61,6 +61,7 @@ def _save_text(path: Path, text: str):
 
 def run_getmessage() -> dict:
     """调用远程API拉取消息，按配置成员与命名规则保存到各自目录，并写入数据库。"""
+    print("开始更新所有组的消息")
     db = get_db()
     configs = load_group_configs()
     result = {"processed": 0, "items": []}
@@ -225,5 +226,5 @@ def run_getmessage() -> dict:
             except Exception:
                 # 柔性跳过个别成员错误
                 continue
-
+    print("更新所有组的消息完成")
     return result
