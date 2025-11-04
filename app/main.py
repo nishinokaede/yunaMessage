@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -35,17 +34,24 @@ class MessageOut(BaseModel):
     published_at: Optional[str] = None
 
 
-scheduler: AsyncIOScheduler | None = None
-
-
 @app.on_event("startup")
 async def on_startup():
     # 初始化数据库
     get_db().init_db()
 
-    # 启动定时器
-    global scheduler
-    scheduler = AsyncIOScheduler()
+    # 挂载静态文件目录以提供本地文件服务（/data/messages/...）
+    app.mount("/data/messages", StaticFiles(directory=str(MESSAGE_DIR)), name="data-messages")
+
+
+def start_scheduler(loop=None) -> AsyncIOScheduler:
+    """启动独立的定时任务调度器（不绑定到 FastAPI 事件）。
+    可选传入已创建的事件循环以避免在未运行循环时出错。
+    """
+    # 确保数据库可用
+    get_db().init_db()
+
+    # 绑定到传入的事件循环（如果提供）
+    scheduler = AsyncIOScheduler(event_loop=loop)
 
     # gettoken: 8-23 每10分钟
     scheduler.add_job(
@@ -72,38 +78,30 @@ async def on_startup():
     )
 
     scheduler.start()
-
-    # 挂载静态文件目录以提供本地文件服务（/data/messages/...）
-    app.mount("/data/messages", StaticFiles(directory=str(MESSAGE_DIR)), name="data-messages")
-
-
-@app.on_event("shutdown")
-async def on_shutdown():
-    global scheduler
-    if scheduler:
-        scheduler.shutdown(wait=False)
-
-def _trigger_job(job_id: str):
-    global scheduler
-    if not scheduler:
-        raise HTTPException(status_code=503, detail="scheduler not running")
-    job = scheduler.get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail=f"job {job_id} not found")
-    job.modify(next_run_time=datetime.now())
+    # 启动后立刻各运行一次，便于初始化与首轮抓取
+    try:
+        run_gettoken()
+    except Exception:
+        pass
+    try:
+        run_getmessage()
+    except Exception:
+        pass
+    return scheduler
 
 
 @app.post("/manual/getToken")
 async def manual_gettoken():
-    _trigger_job("job_gettoken")
-    return JSONResponse({"ok": True, "status": "in_progress"})
+    # 直接执行一次获取 token 任务
+    result = run_gettoken()
+    return JSONResponse({"ok": True, "result": result})
 
 
 @app.post("/manual/getMessage")
 async def manual_getmessage():
-    # 仅触发一个获取消息的任务以避免重复并发运行
-    _trigger_job("job_getmessage_hourly")
-    return JSONResponse({"ok": True, "status": "in_progress"})
+    # 直接执行一次获取消息任务
+    result = run_getmessage()
+    return JSONResponse({"ok": True, "result": result})
 
 
 @app.get("/messages", response_model=List[MessageOut])
@@ -170,6 +168,21 @@ async def list_messages(limit: int = 100, offset: int = 0, msg_id: str | None = 
 
 
 if __name__ == "__main__":
+    import argparse
+    import asyncio
     import uvicorn
 
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    parser = argparse.ArgumentParser(description="MessageBackend entrypoint")
+    parser.add_argument("--scheduler", action="store_true", help="启动独立定时任务调度器")
+    args = parser.parse_args()
+
+    if args.scheduler:
+        # 独立模式：仅启动定时任务
+        start_scheduler()
+        try:
+            asyncio.get_event_loop().run_forever()
+        except KeyboardInterrupt:
+            pass
+    else:
+        # 启动 API 服务
+        uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

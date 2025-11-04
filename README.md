@@ -18,12 +18,17 @@
    pip install -r requirements.txt
    ```
 
-2. 启动服务：
+2. 启动 API 服务：
    ```powershell
    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
 
-3. 接口说明：
+3. 启动定时任务（独立进程）：
+   ```powershell
+   python main.py --scheduler
+   ```
+
+4. 接口说明：
    - 手动获取 token：`POST http://localhost:8000/manual/gettoken`
    - 手动获取消息：`POST http://localhost:8000/manual/getmessage`
    - 列出消息：`GET http://localhost:8000/messages?limit=100&offset=0`
